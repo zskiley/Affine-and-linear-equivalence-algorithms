@@ -1,0 +1,26 @@
+# Private keys and local credentials
+*.pem
+*.key
+
+# Build artifacts
+*.exe
+*.o
+*.obj
+*.dll
+*.lib
+*.a
+*.pdb
+
+# Local build/output directories
+build/
+cmake-build-*/
+benchmark_runs/
+
+# Editor/OS noise
+.vscode/
+.vs/
+.idea/
+*.swp
+*.tmp
+Thumbs.db
+Desktop.ini
