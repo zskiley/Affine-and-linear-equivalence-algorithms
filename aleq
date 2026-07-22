@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+root=$(CDPATH= cd "$(dirname "$0")" && pwd)
+build="$root/build"
+
+if [ ! -f "$build/CMakeCache.txt" ]; then
+    cmake -S "$root" -B "$build" -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+fi
+cmake --build "$build" --config Release --target aleq --parallel
+
+exe=
+if [ -x "$build/aleq.exe" ]; then
+    exe="$build/aleq.exe"
+elif [ -x "$build/Release/aleq.exe" ]; then
+    exe="$build/Release/aleq.exe"
+elif [ -x "$build/aleq" ]; then
+    exe="$build/aleq"
+elif [ -x "$build/Release/aleq" ]; then
+    exe="$build/Release/aleq"
+else
+    echo "error: built aleq executable was not found" >&2
+    exit 1
+fi
+
+if [ "$#" -eq 0 ]; then
+    echo "Built aleq: $exe"
+    exit 0
+fi
+
+exec "$exe" "$@"

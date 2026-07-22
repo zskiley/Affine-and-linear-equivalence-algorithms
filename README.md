@@ -9,23 +9,33 @@ $$
 
 In linear mode, both translations are constrained to zero.
 
-## Build
+## Quick start
 
-A C++20 compiler and CMake 3.20 or newer are required.
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
-```
-
-The optional install step places `aleq` in the selected prefix:
+Install Git, CMake 3.20 or newer, and a C++20 compiler. Then:
 
 ```sh
-cmake --install build --config Release --prefix ./install
+git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
+cd Affine-and-linear-equivalence-algorithms
+./aleq
 ```
 
-## Usage
+On Windows, use:
+
+```powershell
+git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
+cd Affine-and-linear-equivalence-algorithms
+.\aleq.cmd
+```
+
+This builds the program. Pass two truth tables to run it:
+
+```sh
+./aleq examples/identity_2.tt examples/translated_identity_2.tt
+```
+
+On Windows, use `.\aleq.cmd` instead of `./aleq`.
+
+## Command line
 
 ```text
 aleq LEFT RIGHT [--type affine|linear] [--codomain-dim M] [--threads auto|N] [--all-solutions]
@@ -42,7 +52,7 @@ integers separated by whitespace, commas, or brackets, for example:
 Affine equivalence is the default. Use `--type linear` for linear equivalence:
 
 ```sh
-aleq examples/identity_2.tt examples/translated_identity_2.tt --type affine
+aleq examples/identity_2.tt examples/translated_identity_2.tt
 aleq examples/identity_2.tt examples/translated_identity_2.tt --type linear
 ```
 
@@ -52,6 +62,14 @@ solutions and prints one witness, or every witness with `--all-solutions`.
 
 `--threads auto` uses the available hardware concurrency. Use `--threads N`
 to select a fixed number of workers.
+
+## Manual build
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+ctest --test-dir build -C Release --output-on-failure
+```
 
 ## Sage API
 
