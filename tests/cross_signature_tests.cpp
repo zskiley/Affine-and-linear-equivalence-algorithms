@@ -1,5 +1,6 @@
 #include "../src/cross_signature.hpp"
 
+#include <bit>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -9,7 +10,7 @@ namespace {
 
 int parity(std::uint32_t value)
 {
-    return __builtin_popcount(value) & 1;
+    return std::popcount(value) & 1;
 }
 
 void test_against_direct_formulas()

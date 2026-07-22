@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -49,7 +50,8 @@ inline void reset(LinearBasis& basis, std::uint32_t dim)
         return image_vector == 0;
     }
 
-    const std::uint32_t pivot_bit = 31u - static_cast<std::uint32_t>(__builtin_clz(domain_vector));
+    const std::uint32_t pivot_bit =
+        31u - static_cast<std::uint32_t>(std::countl_zero(domain_vector));
     basis.domain_pivots[pivot_bit] = domain_vector;
     basis.image_pivots[pivot_bit] = image_vector;
     ++basis.rank;
