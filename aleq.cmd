@@ -5,7 +5,7 @@ set "ROOT=%~dp0"
 set "BUILD=%ROOT%build"
 
 if not exist "%BUILD%\CMakeCache.txt" (
-    cmake -S "%ROOT%" -B "%BUILD%" -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+    cmake -S "%ROOT%." -B "%BUILD%" -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
     if errorlevel 1 exit /b 1
 )
 
