@@ -201,14 +201,14 @@ public:
         assert(!buckets.empty());
 
         const Cell old_cell = cells_[cell_id];
-        const Index old_size = old_cell.size();
+        [[maybe_unused]] const Index old_size = old_cell.size();
         assert(old_size > 0);
 
-        Index total_size = 0;
+        [[maybe_unused]] Index total_size = 0;
         for (const auto& bucket : buckets) {
             assert(!bucket.empty());
             total_size += static_cast<Index>(bucket.size());
-            for (const ObjectId object : bucket) {
+            for ([[maybe_unused]] const ObjectId object : bucket) {
                 assert(object_cell_[object] == cell_id);
             }
         }
@@ -605,7 +605,7 @@ private:
         const Cell old_cell = cells_[cell_id];
         const CellId old_next = old_cell.next;
 
-        Index total_size = 0;
+        [[maybe_unused]] Index total_size = 0;
         for (const Index run_size : run_sizes) {
             assert(run_size > 0);
             total_size += run_size;

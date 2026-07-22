@@ -2,10 +2,10 @@
 
 #include "affine_map.hpp"
 #include "group/affine_group.hpp"
+#include "group/paired_affine_group.hpp"
 #include "profile.hpp"
 #include "search_types.hpp"
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -45,10 +45,17 @@ struct Solution {
 [[nodiscard]] inline bool verify_solution(
     std::span<const std::uint32_t> left_function_table,
     std::span<const std::uint32_t> right_function_table,
-    const Solution& solution)
+    const Solution& solution,
+    EquivalenceMode mode = EquivalenceMode::Affine)
 {
     if (!map_is_well_formed(solution.domain_map)
         || !map_is_well_formed(solution.codomain_map)) {
+        return false;
+    }
+
+    if (mode == EquivalenceMode::Linear
+        && (solution.domain_map.translation != 0
+            || solution.codomain_map.translation != 0)) {
         return false;
     }
 
@@ -129,7 +136,6 @@ class SolutionStore {
 public:
     struct Options {
         bool record_a1_automorphisms = false;
-        bool count_verified_only = false;
     };
 
     SolutionStore() = default;
@@ -142,7 +148,8 @@ public:
     [[nodiscard]] bool publish(
         std::span<const std::uint32_t> left_function_table,
         std::span<const std::uint32_t> right_function_table,
-        Solution solution)
+        Solution solution,
+        EquivalenceMode mode = EquivalenceMode::Affine)
     {
         profile::count(profile::counters.publish_calls);
 
@@ -152,15 +159,11 @@ public:
             verified = verify_solution(
                 left_function_table,
                 right_function_table,
-                solution);
+                solution,
+                mode);
         }
         if (!verified) {
             return false;
-        }
-
-        if (options_.count_verified_only) {
-            verified_count_.fetch_add(1, std::memory_order_relaxed);
-            return true;
         }
 
         SolutionKey key;
@@ -169,6 +172,7 @@ public:
             key = make_solution_key(solution);
         }
         const f2::AffineMap a1_map = solution.domain_map;
+        const f2::AffineMap a2_map = solution.codomain_map;
 
         {
             profile::ScopedTimer timer(profile::counters.solution_lock_ns);
@@ -184,13 +188,10 @@ public:
         if (options_.record_a1_automorphisms) {
             profile::ScopedTimer timer(profile::counters.solution_group_add_ns);
             (void)a1_group_.add_generator(a1_map);
+            (void)a2_group_.add_generator(a2_map);
+            (void)paired_group_.add_generator(a1_map, a2_map);
         }
         return true;
-    }
-
-    [[nodiscard]] bool records_a1_automorphisms() const
-    {
-        return options_.record_a1_automorphisms;
     }
 
     [[nodiscard]] group::AffineGroup& a1_group()
@@ -203,12 +204,28 @@ public:
         return a1_group_;
     }
 
+    [[nodiscard]] group::AffineGroup& a2_group()
+    {
+        return a2_group_;
+    }
+
+    [[nodiscard]] const group::AffineGroup& a2_group() const
+    {
+        return a2_group_;
+    }
+
+    [[nodiscard]] group::PairedAffineGroup& paired_group()
+    {
+        return paired_group_;
+    }
+
+    [[nodiscard]] const group::PairedAffineGroup& paired_group() const
+    {
+        return paired_group_;
+    }
+
     [[nodiscard]] std::size_t size() const
     {
-        if (options_.count_verified_only) {
-            return verified_count_.load(std::memory_order_relaxed);
-        }
-
         std::lock_guard<std::mutex> lock(mutex_);
         return solutions_.size();
     }
@@ -218,19 +235,14 @@ public:
         return size() == 0;
     }
 
-    [[nodiscard]] std::vector<Solution> snapshot() const
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return solutions_;
-    }
-
 private:
     Options options_;
     mutable std::mutex mutex_;
     std::vector<Solution> solutions_;
     std::unordered_set<SolutionKey, SolutionKeyHash> known_;
     group::AffineGroup a1_group_;
-    std::atomic<std::size_t> verified_count_ = 0;
+    group::AffineGroup a2_group_;
+    group::PairedAffineGroup paired_group_;
 };
 
 } // namespace affine

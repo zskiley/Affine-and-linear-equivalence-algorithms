@@ -13,8 +13,11 @@
 
 # Local build/output directories
 build/
+build*/
 cmake-build-*/
 benchmark_runs/
+*.log
+*.csv
 
 # Editor/OS noise
 .vscode/
@@ -22,6 +25,5 @@ benchmark_runs/
 .idea/
 *.swp
 *.tmp
-__pycache__/
 Thumbs.db
 Desktop.ini

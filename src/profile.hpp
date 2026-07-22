@@ -13,8 +13,6 @@ struct Counters {
     std::atomic<std::uint64_t> dfs_local_refine_ns = 0;
     std::atomic<std::uint64_t> dfs_local_branch_ns = 0;
     std::atomic<std::uint64_t> dfs_local_initial_candidates_ns = 0;
-    std::atomic<std::uint64_t> dfs_local_recompute_ns = 0;
-    std::atomic<std::uint64_t> dfs_local_enqueue_ns = 0;
     std::atomic<std::uint64_t> dfs_local_next_candidate_ns = 0;
     std::atomic<std::uint64_t> dfs_local_rollback_ns = 0;
 
@@ -93,8 +91,6 @@ struct Snapshot {
     std::uint64_t dfs_local_refine_ns = 0;
     std::uint64_t dfs_local_branch_ns = 0;
     std::uint64_t dfs_local_initial_candidates_ns = 0;
-    std::uint64_t dfs_local_recompute_ns = 0;
-    std::uint64_t dfs_local_enqueue_ns = 0;
     std::uint64_t dfs_local_next_candidate_ns = 0;
     std::uint64_t dfs_local_rollback_ns = 0;
     std::uint64_t refine_calls = 0;
@@ -177,8 +173,6 @@ inline void reset()
     counters.dfs_local_refine_ns.store(0, std::memory_order_relaxed);
     counters.dfs_local_branch_ns.store(0, std::memory_order_relaxed);
     counters.dfs_local_initial_candidates_ns.store(0, std::memory_order_relaxed);
-    counters.dfs_local_recompute_ns.store(0, std::memory_order_relaxed);
-    counters.dfs_local_enqueue_ns.store(0, std::memory_order_relaxed);
     counters.dfs_local_next_candidate_ns.store(0, std::memory_order_relaxed);
     counters.dfs_local_rollback_ns.store(0, std::memory_order_relaxed);
     counters.refine_calls.store(0, std::memory_order_relaxed);
@@ -258,10 +252,6 @@ inline void reset()
             counters.dfs_local_branch_ns.load(std::memory_order_relaxed),
         .dfs_local_initial_candidates_ns =
             counters.dfs_local_initial_candidates_ns.load(std::memory_order_relaxed),
-        .dfs_local_recompute_ns =
-            counters.dfs_local_recompute_ns.load(std::memory_order_relaxed),
-        .dfs_local_enqueue_ns =
-            counters.dfs_local_enqueue_ns.load(std::memory_order_relaxed),
         .dfs_local_next_candidate_ns =
             counters.dfs_local_next_candidate_ns.load(std::memory_order_relaxed),
         .dfs_local_rollback_ns =

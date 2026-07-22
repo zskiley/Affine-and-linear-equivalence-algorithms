@@ -1,148 +1,112 @@
-# Affine and linear equivalence algorithms
+# Affine and Linear Equivalence Algorithms
 
-`aleq` checks affine or linear equivalence between vectorial Boolean functions
-given as truth tables. It searches for invertible maps satisfying
+This repository contains a C++20 implementation of partition-refinement and
+depth-first-search algorithms for linear and affine equivalence of vectorial
+Boolean functions over `F_2^n`.
 
-$$
-A_{out}(F(x)) = G(A_{in}(x)).
-$$
+The submission entry point is the `affine_equiv` command-line tool.
 
-In linear mode, both translations are constrained to zero.
+## Quick Start
 
-## Quick start
+The code has no external library dependency beyond a C++20 compiler and CMake.
+Run the included script to build the tool and check the examples:
 
-Install Git, CMake 3.20 or newer, and a C++20 compiler. Then:
-
-```sh
-git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
-cd Affine-and-linear-equivalence-algorithms
-./aleq
+```bash
+cmake -P run_examples.cmake
 ```
 
-On Windows, use:
-
-```powershell
-git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
-cd Affine-and-linear-equivalence-algorithms
-.\aleq.cmd
-```
-
-This builds the program. Pass two truth tables to run it:
-
-```sh
-./aleq examples/identity_2.tt examples/translated_identity_2.tt
-```
-
-On Windows, use `.\aleq.cmd` instead of `./aleq`.
-
-## Command line
+The important output line for equivalence tests is:
 
 ```text
-aleq LEFT RIGHT [--type affine|linear] [--codomain-dim M] [--threads auto|N] [--all-solutions]
-aleq TABLE --self [--generators|--all-solutions] [--type affine|linear] [--threads auto|N]
+found=1
 ```
 
-The domain dimension is inferred from the truth-table length. The codomain
-dimension defaults to the domain dimension. Table values are unsigned decimal
-integers separated by whitespace, commas, or brackets, for example:
+which means that an equivalence was found.
+
+## Input Format
+
+A function is given by its truth table as whitespace- or comma-separated
+nonnegative integers. For an `n -> n` function, the file must contain exactly
+`2^n` values, each in `[0, 2^n)`.
+
+Example, the identity function on `F_2^3`:
 
 ```text
-[0, 1, 2, 3]
+0 1 2 3 4 5 6 7
 ```
 
-Affine equivalence is the default. Use `--type linear` for linear equivalence:
+## Commands
 
-```sh
-aleq examples/identity_2.tt examples/translated_identity_2.tt
-aleq examples/identity_2.tt examples/translated_identity_2.tt --type linear
+Test linear equivalence:
+
+```bash
+./build/affine_equiv equiv --mode linear \
+  --left F.tt \
+  --right G.tt
 ```
 
-The first command reports an affine equivalence; the second reports that the
-same functions are not linearly equivalent. The program reports the number of
-solutions and prints one witness, or every witness with `--all-solutions`.
+Test affine equivalence:
 
-For self-equivalences, pass one table with `--self`:
-
-```sh
-aleq examples/identity_2.tt --self
-aleq examples/identity_2.tt --self --all-solutions
+```bash
+./build/affine_equiv equiv --mode affine \
+  --left F.tt \
+  --right G.tt
 ```
 
-The first command prints a set of generators for the self-equivalence group.
-The second prints every group element. `--generators` may be added explicitly,
-but it is the default with `--self`.
+Compute generators for the affine self-equivalence group of one function:
 
-`--threads auto` uses the available hardware concurrency. Use `--threads N`
-to select a fixed number of workers.
-
-## Manual build
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
-ctest --test-dir build -C Release --output-on-failure
+```bash
+./build/affine_equiv self --mode affine --function F.tt
 ```
 
-## Sage API
+Run seeded equivalence: first compute the target function's self-equivalence
+group, then use its paired `(A1,A2)` generators for orbit pruning in the
+equivalence search.
 
-From the repository root, start Sage and import the wrapper:
-
-```python
-from f2_equivalence import find_equivalence, self_equivalence_group
-
-identity = [0, 1, 2, 3]
-translated = [1, 0, 3, 2]
-
-result = find_equivalence(identity, translated)
-group = self_equivalence_group(identity, kind="linear")
-group.order()  # 6
-group.gens()
+```bash
+./build/affine_equiv seeded-equiv --mode affine \
+  --left examples/identity_3.tt \
+  --right examples/affine_translate_3.tt
 ```
 
-`find_equivalence` returns one witness and the total solution count, or `None`
-when the functions are not equivalent. `equivalences` returns every witness,
-and `self_equivalences` returns every equivalence of a function with itself.
-`self_equivalence_group` returns an actual Sage permutation group built from
-the C++ generator set; `automorphism_group` is a shorter alias. Use
-`kind="linear"` for linear equivalence. `is_equivalent` returns only a Boolean.
+## Options
 
-The group acts on the domain points followed by the codomain points. Sage label
-`x + 1` represents domain point `x`; the codomain labels follow the domain
-block.
+`--mode linear|affine`
+: Selects linear or affine equivalence. Linear mode fixes the zero point.
 
-The first call finds an installed or previously built `aleq`; if necessary, it
-builds the executable automatically with CMake. Pass `executable="..."` only to
-select a custom binary.
+`--branch POLICY`
+: Selects the branching policy. The default is `hyperplanes_only`. Available
+  policies are `hyperplanes_only`, `hyperplanes_first`, `smallest_any`,
+  `domain_point_first`, `codomain_point_first`,
+  `domain_hyperplane_first`, and `codomain_hyperplane_first`.
 
-A complete runnable example is in `sage_example.sage`:
+`--profile`
+: Prints selected profiling counters after the run.
 
-```sh
-sage sage_example.sage
+## Output
+
+The tool prints key-value lines intended to be easy to parse:
+
+```text
+task=equiv
+mode=linear
+branch_policy=hyperplanes_only
+dimension=3
+found=1
+elapsed_ms=...
+nodes=...
+solutions=1
+a1_generators=...
+a2_generators=...
 ```
 
-## C++ API
+For self-equivalence runs, `solutions` is the number of verified
+self-equivalences found while discovering the group. Because the search uses
+orbit pruning after new automorphisms are found, this is not necessarily the
+full group order. `a1_generators` and `a2_generators` are the number of stored
+generators in the discovered domain and codomain automorphism groups.
 
-`src/equivalence_api.hpp` contains the small reusable C++ entry point used by
-the command line program. `affine::api::find_equivalences` accepts two truth
-tables, dimensions, the affine/linear mode, and a thread count.
-
-To get generators for a self-equivalence group:
-
-```cpp
-const std::vector<std::uint32_t> table { 0, 1, 2, 3 };
-const affine::api::EquivalenceProblem problem {
-    .domain_dimension = 2,
-    .codomain_dimension = 2,
-    .left_table = table,
-    .right_table = table,
-};
-
-const affine::api::SelfEquivalenceGroup group =
-    affine::api::find_self_equivalence_group(problem);
-
-// group.order contains the number of self-equivalences.
-// group.generators contains a generating set of map pairs.
-```
-
-Use `find_equivalences(problem)` instead when every self-equivalence is needed.
-Set `SearchOptions::kind` to `EquivalenceKind::Linear` for the linear group.
+Orbit pruning is performed with paired self-equivalence generators. When the
+search path has fixed both domain-side and codomain-side right objects, the
+algorithm stabilizes the paired group against all of those fixed objects before
+projecting to the current branch side.

@@ -4,6 +4,11 @@
 
 namespace affine {
 
+enum class EquivalenceMode {
+    Affine,
+    Linear,
+};
+
 enum class BranchKind {
     DomainPoint,
     CodomainPoint,

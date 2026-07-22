@@ -4,6 +4,7 @@
 #include "partition.hpp"
 #include "partition_pair.hpp"
 #include "profile.hpp"
+#include "search_types.hpp"
 #include "signatures_f2.hpp"
 #include "solution_store.hpp"
 
@@ -68,13 +69,42 @@ struct RefinementWorkspace {
 
 [[nodiscard]] inline SearchPartitions make_initial_partitions(
     std::uint32_t domain_dim,
-    std::uint32_t codomain_dim)
+    std::uint32_t codomain_dim,
+    EquivalenceMode mode = EquivalenceMode::Affine)
 {
     SearchPartitions partitions;
     partitions.P = PartitionPair(f2::point_count(domain_dim));
     partitions.Q = PartitionPair(f2::point_count(codomain_dim));
     partitions.L = PartitionPair(f2::hyperplane_count(domain_dim));
     partitions.R = PartitionPair(f2::hyperplane_count(codomain_dim));
+    if (mode == EquivalenceMode::Linear) {
+        partitions.P.left.individualize(0);
+        partitions.P.right.individualize(0);
+        partitions.Q.left.individualize(0);
+        partitions.Q.right.individualize(0);
+
+        auto split_hyperplanes_by_offset = [](Partition& partition) {
+            const Partition::CellId cell = partition.first_cell();
+            if (cell == Partition::npos || partition.cell(cell).size() <= 1) {
+                return;
+            }
+
+            std::vector<std::vector<Partition::ObjectId>> buckets(2);
+            for (Partition::ObjectId object = 0;
+                 object < partition.object_count();
+                 ++object) {
+                buckets[f2::hyperplane_offset(object)].push_back(object);
+            }
+            if (!buckets[0].empty() && !buckets[1].empty()) {
+                partition.split_cell(cell, buckets);
+            }
+        };
+
+        split_hyperplanes_by_offset(partitions.L.left);
+        split_hyperplanes_by_offset(partitions.L.right);
+        split_hyperplanes_by_offset(partitions.R.left);
+        split_hyperplanes_by_offset(partitions.R.right);
+    }
     return partitions;
 }
 
@@ -118,6 +148,77 @@ inline void rollback(SearchPartitions& partitions, const SearchPartitionSnapshot
     }
 
     return left_cell == Partition::npos && right_cell == Partition::npos;
+}
+
+inline RefineStep individualize_compatible_pair(
+    PartitionPair& pair,
+    Partition::ObjectId left_object,
+    Partition::ObjectId right_object)
+{
+    if (left_object >= pair.left.object_count()
+        || right_object >= pair.right.object_count()) {
+        return RefineStep::Inconsistent;
+    }
+
+    const auto left_snapshot = pair.left.snapshot();
+    const auto right_snapshot = pair.right.snapshot();
+    const Partition::CellId target_left = pair.left.cell_of(left_object);
+    const Partition::CellId target_right = pair.right.cell_of(right_object);
+
+    Partition::CellId left_cell = pair.left.first_cell();
+    Partition::CellId right_cell = pair.right.first_cell();
+    while (left_cell != Partition::npos && right_cell != Partition::npos) {
+        if (pair.left.cell(left_cell).size() != pair.right.cell(right_cell).size()) {
+            pair.left.rollback(left_snapshot);
+            pair.right.rollback(right_snapshot);
+            return RefineStep::Inconsistent;
+        }
+
+        if (left_cell == target_left || right_cell == target_right) {
+            if (left_cell != target_left || right_cell != target_right) {
+                pair.left.rollback(left_snapshot);
+                pair.right.rollback(right_snapshot);
+                return RefineStep::Inconsistent;
+            }
+            break;
+        }
+        left_cell = pair.left.next_cell(left_cell);
+        right_cell = pair.right.next_cell(right_cell);
+    }
+
+    if (left_cell == Partition::npos || right_cell == Partition::npos) {
+        pair.left.rollback(left_snapshot);
+        pair.right.rollback(right_snapshot);
+        return RefineStep::Inconsistent;
+    }
+
+    const bool changed =
+        !pair.left.is_singleton(target_left)
+        || !pair.right.is_singleton(target_right);
+    pair.left.individualize(left_object);
+    pair.right.individualize(right_object);
+    if (!same_shape(pair.left, pair.right)) {
+        pair.left.rollback(left_snapshot);
+        pair.right.rollback(right_snapshot);
+        return RefineStep::Inconsistent;
+    }
+
+    return changed ? RefineStep::Changed : RefineStep::Unchanged;
+}
+
+inline RefineStep enforce_linear_zero_image_constraint(
+    std::span<const std::uint32_t> left_function_table,
+    std::span<const std::uint32_t> right_function_table,
+    SearchPartitions& partitions)
+{
+    if (left_function_table.empty() || right_function_table.empty()) {
+        return RefineStep::Inconsistent;
+    }
+
+    return individualize_compatible_pair(
+        partitions.Q,
+        left_function_table[0],
+        right_function_table[0]);
 }
 
 [[nodiscard]] inline bool same_refinement_shape(
@@ -266,6 +367,19 @@ inline RefineStep individualize_pair_by_affine_map(
     return any_changed ? RefineStep::Changed : RefineStep::Unchanged;
 }
 
+[[nodiscard]] inline f2::AffineFitStatus fit_point_map(
+    EquivalenceMode mode,
+    std::uint32_t dim,
+    const PartitionPair& point_pair,
+    f2::AffineMap& map,
+    f2::AffineFitWorkspace& workspace)
+{
+    if (mode == EquivalenceMode::Linear) {
+        return f2::fit_linear_map(dim, point_pair, map, workspace);
+    }
+    return f2::fit_affine_map(dim, point_pair, map, workspace);
+}
+
 inline RefineStep propagate_determined_affine_maps(
     std::uint32_t domain_dim,
     std::uint32_t codomain_dim,
@@ -274,14 +388,16 @@ inline RefineStep propagate_determined_affine_maps(
     SearchPartitions& partitions,
     RefinementWorkspace& workspace,
     SolutionStore* solution_store,
-    std::span<const BranchMove> path)
+    std::span<const BranchMove> path,
+    EquivalenceMode mode = EquivalenceMode::Affine)
 {
     profile::ScopedTimer timer(profile::counters.affine_propagate_ns);
     profile::count(profile::counters.affine_propagate_calls);
 
     bool any_changed = false;
 
-    const f2::AffineFitStatus domain_status = f2::fit_affine_map(
+    const f2::AffineFitStatus domain_status = fit_point_map(
+        mode,
         domain_dim,
         partitions.P,
         workspace.domain_map,
@@ -303,7 +419,8 @@ inline RefineStep propagate_determined_affine_maps(
     const bool domain_determined =
         domain_status == f2::AffineFitStatus::Determined;
 
-    const f2::AffineFitStatus codomain_status = f2::fit_affine_map(
+    const f2::AffineFitStatus codomain_status = fit_point_map(
+        mode,
         codomain_dim,
         partitions.Q,
         workspace.codomain_map,
@@ -336,7 +453,8 @@ inline RefineStep propagate_determined_affine_maps(
             (void)solution_store->publish(
                 left_function_table,
                 right_function_table,
-                std::move(solution));
+                std::move(solution),
+                mode);
         }
         return RefineStep::Solved;
     }
@@ -352,7 +470,8 @@ inline RefineResult refine_until_stable(
     SearchPartitions& partitions,
     RefinementWorkspace& workspace,
     SolutionStore* solution_store = nullptr,
-    std::span<const BranchMove> path = {})
+    std::span<const BranchMove> path = {},
+    EquivalenceMode mode = EquivalenceMode::Affine)
 {
     profile::ScopedTimer timer(profile::counters.refine_ns);
     profile::count(profile::counters.refine_calls);
@@ -360,6 +479,21 @@ inline RefineResult refine_until_stable(
     const SearchPartitionSnapshot start = snapshot(partitions);
 
     while (true) {
+        if (mode == EquivalenceMode::Linear) {
+            const RefineStep zero_status =
+                enforce_linear_zero_image_constraint(
+                    left_function_table,
+                    right_function_table,
+                    partitions);
+            if (zero_status == RefineStep::Inconsistent) {
+                rollback(partitions, start);
+                return RefineResult::Stop;
+            }
+            if (changed(zero_status)) {
+                continue;
+            }
+        }
+
         const RefineStep early_affine_status = propagate_determined_affine_maps(
             domain_dim,
             codomain_dim,
@@ -368,7 +502,8 @@ inline RefineResult refine_until_stable(
             partitions,
             workspace,
             solution_store,
-            path);
+            path,
+            mode);
         if (early_affine_status == RefineStep::Inconsistent) {
             rollback(partitions, start);
             return RefineResult::Stop;
@@ -506,7 +641,8 @@ inline RefineResult refine_until_stable(
             partitions,
             workspace,
             solution_store,
-            path);
+            path,
+            mode);
         if (affine_status == RefineStep::Inconsistent) {
             rollback(partitions, start);
             return RefineResult::Stop;

@@ -108,6 +108,52 @@ inline void collect_singleton_pairs(
     return AffineFitStatus::Determined;
 }
 
+[[nodiscard]] inline AffineFitStatus fit_linear_map(
+    std::uint32_t dim,
+    const PartitionPair& point_pair,
+    AffineMap& map,
+    AffineFitWorkspace& workspace)
+{
+    collect_singleton_pairs(point_pair, workspace);
+    if (workspace.singleton_left.empty()) {
+        return AffineFitStatus::Underdetermined;
+    }
+
+    reset(workspace.basis, dim);
+
+    for (std::size_t i = 0; i < workspace.singleton_left.size(); ++i) {
+        const std::uint32_t domain_vector = workspace.singleton_left[i];
+        const std::uint32_t image_vector = workspace.singleton_right[i];
+        if (domain_vector == 0) {
+            if (image_vector != 0) {
+                return AffineFitStatus::Inconsistent;
+            }
+            continue;
+        }
+
+        if (!insert_vector(workspace.basis, domain_vector, image_vector)) {
+            return AffineFitStatus::Inconsistent;
+        }
+    }
+
+    if (workspace.basis.rank < dim) {
+        return AffineFitStatus::Underdetermined;
+    }
+
+    map.dim = dim;
+    map.translation = 0;
+    map.basis_images.resize(dim);
+    basis_vector_images(workspace.basis, map.basis_images);
+
+    for (std::size_t i = 0; i < workspace.singleton_left.size(); ++i) {
+        if (apply(map, workspace.singleton_left[i]) != workspace.singleton_right[i]) {
+            return AffineFitStatus::Inconsistent;
+        }
+    }
+
+    return AffineFitStatus::Determined;
+}
+
 [[nodiscard]] inline bool affine_map_respects_partition(
     const AffineMap& map,
     const PartitionPair& pair,

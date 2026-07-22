@@ -14,7 +14,6 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <span>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -22,11 +21,6 @@
 namespace affine::group {
 
 using ObjectId = std::uint32_t;
-
-struct FixedObjects {
-    std::span<const ObjectId> points;
-    std::span<const ObjectId> hyperplanes;
-};
 
 struct AffineGroupKey {
     std::vector<std::uint32_t> words;
@@ -181,8 +175,7 @@ public:
         {
             profile::ScopedTimer timer(profile::counters.group_add_precheck_ns);
             const std::shared_ptr<const SchreierSims> membership =
-                std::atomic_load_explicit(
-                    &published_membership_, std::memory_order_acquire);
+                published_membership_.load(std::memory_order_acquire);
             if (membership != nullptr && membership->contains(map)) {
                 profile::count(profile::counters.group_add_membership_hits);
                 remember_generated(key);
@@ -235,8 +228,7 @@ public:
     {
         profile::ScopedTimer timer(profile::counters.group_snapshot_ns);
         const std::shared_ptr<const AffineGroupSnapshot> published =
-            std::atomic_load_explicit(
-                &published_snapshot_, std::memory_order_acquire);
+            published_snapshot_.load(std::memory_order_acquire);
         if (published == nullptr) {
             profile::count(profile::counters.group_snapshot_calls);
             return {};
@@ -301,14 +293,12 @@ private:
     {
         std::shared_ptr<const AffineGroupSnapshot> snapshot =
             make_snapshot_locked(version);
-        std::atomic_store_explicit(
-            &published_snapshot_, std::move(snapshot), std::memory_order_release);
+        published_snapshot_.store(std::move(snapshot), std::memory_order_release);
         std::shared_ptr<const SchreierSims> membership =
             dim_ == unset_dim
                 ? nullptr
                 : std::make_shared<SchreierSims>(schreier_sims_);
-        std::atomic_store_explicit(
-            &published_membership_,
+        published_membership_.store(
             std::move(membership),
             std::memory_order_release);
     }
@@ -319,30 +309,11 @@ private:
     std::unordered_set<AffineGroupKey, AffineGroupKeyHash> known_;
     std::unordered_set<AffineGroupKey, AffineGroupKeyHash> generated_members_;
     SchreierSims schreier_sims_;
-    mutable std::shared_ptr<const AffineGroupSnapshot> published_snapshot_;
-    mutable std::shared_ptr<const SchreierSims> published_membership_;
+    mutable std::atomic<std::shared_ptr<const AffineGroupSnapshot>> published_snapshot_;
+    mutable std::atomic<std::shared_ptr<const SchreierSims>> published_membership_;
     std::atomic<std::uint64_t> version_ = 0;
     static constexpr std::uint32_t unset_dim = std::numeric_limits<std::uint32_t>::max();
     std::uint32_t dim_ = unset_dim;
 };
-
-[[nodiscard]] inline bool fixes_all(
-    const AffineGroupGenerator& generator,
-    FixedObjects fixed)
-{
-    for (const ObjectId point : fixed.points) {
-        if (generator.apply_point(point) != point) {
-            return false;
-        }
-    }
-
-    for (const ObjectId hyperplane : fixed.hyperplanes) {
-        if (generator.apply_hyperplane(hyperplane) != hyperplane) {
-            return false;
-        }
-    }
-
-    return true;
-}
 
 } // namespace affine::group
