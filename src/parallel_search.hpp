@@ -30,16 +30,15 @@ inline void run_parallel_worker_loop(
     SolutionStore& solutions,
     const ParallelSearchOptions& options,
     DomainStabilizerCache& domain_stabilizer_cache,
-    std::atomic<std::uint32_t>& active_workers,
     std::atomic<bool>& done,
     std::atomic<std::uint64_t>* remaining_node_budget,
     WorkerStats& stats)
 {
     SearchTask task = make_search_task(problem, options.dfs_options);
 
-    while (!done.load(std::memory_order_acquire)) {
+    while (true) {
         WorkItem item;
-        if (queue.try_pop(item, &active_workers)) {
+        if (queue.wait_pop(item, done)) {
             ++stats.popped;
             const auto work_start = std::chrono::steady_clock::now();
             run_worker_item(
@@ -62,17 +61,10 @@ inline void run_parallel_worker_loop(
                     work_end - work_start)
                     .count());
             queue.complete(item);
-            active_workers.fetch_sub(1, std::memory_order_acq_rel);
             continue;
         }
 
-        if (active_workers.load(std::memory_order_acquire) == 0
-            && queue.approximate_size() == 0) {
-            done.store(true, std::memory_order_release);
-            break;
-        }
-
-        std::this_thread::yield();
+        break;
     }
 }
 
@@ -90,7 +82,6 @@ inline void run_parallel_worker_loop(
     ParallelSearchResult result;
     result.worker_stats.resize(options.worker_count);
 
-    std::atomic<std::uint32_t> active_workers = 0;
     std::atomic<bool> done = false;
     std::atomic<std::uint64_t> remaining_node_budget = options.max_dfs_nodes;
     std::atomic<std::uint64_t>* remaining_node_budget_ptr =
@@ -107,7 +98,6 @@ inline void run_parallel_worker_loop(
              &solutions,
              &options,
              &domain_stabilizer_cache,
-             &active_workers,
              &done,
              remaining_node_budget_ptr,
              &stats = result.worker_stats[worker]] {
@@ -118,7 +108,6 @@ inline void run_parallel_worker_loop(
                     solutions,
                     options,
                     domain_stabilizer_cache,
-                    active_workers,
                     done,
                     remaining_node_budget_ptr,
                     stats);

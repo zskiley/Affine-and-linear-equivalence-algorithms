@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <deque>
 #include <limits>
 #include <mutex>
@@ -31,12 +32,15 @@ public:
 
     void push(WorkItem item)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        const std::size_t depth = item.path.size();
-        ensure_depth(depth);
-        items_by_depth_[depth].push_back(std::move(item));
-        ++queued_size_;
-        ++pushed_by_depth_[depth];
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            const std::size_t depth = item.path.size();
+            ensure_depth(depth);
+            items_by_depth_[depth].push_back(std::move(item));
+            ++queued_size_;
+            ++pushed_by_depth_[depth];
+        }
+        work_available_.notify_one();
     }
 
     [[nodiscard]] bool try_pop(WorkItem& item)
@@ -49,32 +53,51 @@ public:
         std::atomic<std::uint32_t>* active_workers)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        for (std::size_t depth = 0; depth < items_by_depth_.size(); ++depth) {
-            std::deque<WorkItem>& bucket = items_by_depth_[depth];
-            if (bucket.empty()) {
-                continue;
-            }
+        return pop_locked(item, active_workers);
+    }
 
-            item = std::move(bucket.front());
-            bucket.pop_front();
-            --queued_size_;
-            ++active_by_depth_[depth];
-            ++popped_by_depth_[depth];
-            if (active_workers != nullptr) {
-                active_workers->fetch_add(1, std::memory_order_acq_rel);
-            }
-            return true;
+    [[nodiscard]] bool wait_pop(
+        WorkItem& item,
+        const std::atomic<bool>& stop_requested)
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        work_available_.wait(lock, [&] {
+            return stop_requested.load(std::memory_order_acquire)
+                || queued_size_ != 0
+                || active_size_ == 0;
+        });
+
+        if (stop_requested.load(std::memory_order_acquire)
+            || queued_size_ == 0) {
+            return false;
         }
+        return pop_locked(item, nullptr);
+    }
 
-        return false;
+    void request_stop(std::atomic<bool>& stop_requested)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_requested.store(true, std::memory_order_release);
+        }
+        work_available_.notify_all();
     }
 
     void complete(const WorkItem& item)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        const std::size_t depth = item.path.size();
-        if (depth < active_by_depth_.size() && active_by_depth_[depth] != 0) {
-            --active_by_depth_[depth];
+        bool exhausted = false;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            const std::size_t depth = item.path.size();
+            if (depth < active_by_depth_.size() && active_by_depth_[depth] != 0) {
+                --active_by_depth_[depth];
+                --active_size_;
+            }
+            exhausted = queued_size_ == 0 && active_size_ == 0;
+        }
+
+        if (exhausted) {
+            work_available_.notify_all();
         }
     }
 
@@ -115,6 +138,30 @@ public:
     }
 
 private:
+    [[nodiscard]] bool pop_locked(
+        WorkItem& item,
+        std::atomic<std::uint32_t>* active_workers)
+    {
+        for (std::size_t depth = 0; depth < items_by_depth_.size(); ++depth) {
+            std::deque<WorkItem>& bucket = items_by_depth_[depth];
+            if (bucket.empty()) {
+                continue;
+            }
+
+            item = std::move(bucket.front());
+            bucket.pop_front();
+            --queued_size_;
+            ++active_size_;
+            ++active_by_depth_[depth];
+            ++popped_by_depth_[depth];
+            if (active_workers != nullptr) {
+                active_workers->fetch_add(1, std::memory_order_acq_rel);
+            }
+            return true;
+        }
+
+        return false;
+    }
     void ensure_depth(std::size_t depth)
     {
         if (depth >= items_by_depth_.size()) {
@@ -126,11 +173,13 @@ private:
     }
 
     mutable std::mutex mutex_;
+    std::condition_variable work_available_;
     std::vector<std::deque<WorkItem>> items_by_depth_;
     std::vector<std::size_t> active_by_depth_;
     std::vector<std::uint64_t> pushed_by_depth_;
     std::vector<std::uint64_t> popped_by_depth_;
     std::size_t queued_size_ = 0;
+    std::size_t active_size_ = 0;
 };
 
 [[nodiscard]] inline bool path_has_prefix(

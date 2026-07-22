@@ -1,8 +1,12 @@
 #include "../src/worker.hpp"
 
+#include <atomic>
 #include <cassert>
+#include <chrono>
 #include <cstdint>
+#include <future>
 #include <iostream>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -100,6 +104,50 @@ void test_work_queue_tracks_unfinished_shallower_work()
 
     queue.complete(item);
     assert(!queue.has_unfinished_above(2));
+}
+
+void test_work_queue_waits_while_work_is_active()
+{
+    affine::WorkQueue queue;
+    queue.push(affine::WorkItem {
+        .path = { hyperplane_move(1, 2) },
+    });
+
+    affine::WorkItem active;
+    assert(queue.try_pop(active));
+    std::atomic<bool> stop_requested = false;
+
+    std::promise<bool> child_acquired_promise;
+    std::future<bool> child_acquired = child_acquired_promise.get_future();
+    std::promise<void> release_child_promise;
+    std::shared_future<void> release_child =
+        release_child_promise.get_future().share();
+    std::thread child_worker([&] {
+        affine::WorkItem child;
+        const bool acquired = queue.wait_pop(child, stop_requested);
+        child_acquired_promise.set_value(acquired);
+        if (acquired) {
+            release_child.wait();
+            queue.complete(child);
+        }
+    });
+
+    queue.push(affine::WorkItem {
+        .path = { hyperplane_move(1, 2), hyperplane_move(3, 4) },
+    });
+    queue.complete(active);
+    assert(child_acquired.get());
+
+    std::future<bool> drain_waiter = std::async(std::launch::async, [&] {
+        affine::WorkItem item;
+        return queue.wait_pop(item, stop_requested);
+    });
+    assert(drain_waiter.wait_for(std::chrono::milliseconds(50))
+        == std::future_status::timeout);
+
+    release_child_promise.set_value();
+    child_worker.join();
+    assert(!drain_waiter.get());
 }
 
 void test_rebuild_from_path()
@@ -217,6 +265,7 @@ int main()
     test_work_queue_fifo();
     test_work_queue_pops_shallowest_depth_first();
     test_work_queue_tracks_unfinished_shallower_work();
+    test_work_queue_waits_while_work_is_active();
     test_rebuild_from_path();
     test_rebuild_rejects_conflicting_path();
     test_serial_worker_skips_dead_prefix();

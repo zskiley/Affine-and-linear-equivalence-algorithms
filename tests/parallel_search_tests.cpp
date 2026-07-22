@@ -1,5 +1,6 @@
 #include "../src/parallel_search.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -35,6 +36,42 @@ affine::BranchMove hyperplane_move(std::uint32_t left, std::uint32_t right)
         .kind = affine::BranchKind::DomainHyperplane,
         .left_object = left,
         .right_object = right,
+    };
+}
+
+using CanonicalSolutions = std::vector<std::vector<std::uint32_t>>;
+
+struct SearchOutcome {
+    CanonicalSolutions solutions;
+    affine::WorkerStats stats;
+};
+
+SearchOutcome run_identity_search(
+    std::uint32_t dim,
+    std::uint32_t worker_count,
+    std::uint64_t max_dfs_nodes = 0)
+{
+    const std::vector<std::uint32_t> table = identity_table(dim);
+    const affine::DfsProblem problem = identity_problem(dim, table);
+    affine::WorkQueue queue;
+    queue.push(affine::WorkItem {});
+    affine::PruningStore pruner;
+    affine::SolutionStore solutions;
+    affine::ParallelSearchOptions options;
+    options.worker_count = worker_count;
+    options.max_dfs_nodes = max_dfs_nodes;
+
+    const affine::ParallelSearchResult result =
+        affine::run_parallel_search(problem, queue, pruner, solutions, options);
+
+    CanonicalSolutions canonical;
+    for (const affine::Solution& solution : solutions.snapshot()) {
+        canonical.push_back(affine::make_solution_key(solution).words);
+    }
+    std::sort(canonical.begin(), canonical.end());
+    return SearchOutcome {
+        .solutions = std::move(canonical),
+        .stats = affine::total_worker_stats(result),
     };
 }
 
@@ -96,12 +133,24 @@ void test_parallel_search_runs_small_root_item()
     assert(queue.approximate_size() == 0);
 }
 
+void test_parallel_matches_serial_and_cancels_cleanly()
+{
+    const SearchOutcome serial = run_identity_search(3, 1);
+    const SearchOutcome parallel = run_identity_search(3, 4);
+    assert(!serial.solutions.empty());
+    assert(serial.solutions == parallel.solutions);
+
+    const SearchOutcome limited = run_identity_search(3, 4, 1);
+    assert(limited.stats.dfs_nodes == 1);
+}
+
 } // namespace
 
 int main()
 {
     test_parallel_search_skips_dead_item();
     test_parallel_search_runs_small_root_item();
+    test_parallel_matches_serial_and_cancels_cleanly();
 
     std::cout << "parallel search tests passed\n";
     return 0;

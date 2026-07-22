@@ -546,7 +546,11 @@ struct BranchCell {
     }
 
     if (context->stop_requested != nullptr) {
-        context->stop_requested->store(true, std::memory_order_release);
+        if (context->queue != nullptr) {
+            context->queue->request_stop(*context->stop_requested);
+        } else {
+            context->stop_requested->store(true, std::memory_order_release);
+        }
     }
     return false;
 }
