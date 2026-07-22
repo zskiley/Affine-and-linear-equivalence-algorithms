@@ -22,5 +22,6 @@ benchmark_runs/
 .idea/
 *.swp
 *.tmp
+__pycache__/
 Thumbs.db
 Desktop.ini

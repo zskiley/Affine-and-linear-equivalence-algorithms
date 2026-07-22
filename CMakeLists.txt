@@ -61,6 +61,16 @@ if(BUILD_TESTING)
             add_test(NAME "${test_target}" COMMAND "${test_target}")
         endif()
     endforeach()
+
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME sage_api_tests
+            COMMAND Python3::Interpreter
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/sage_api_tests.py"
+                "$<TARGET_FILE:aleq>"
+        )
+    endif()
 endif()
 
 install(TARGETS aleq

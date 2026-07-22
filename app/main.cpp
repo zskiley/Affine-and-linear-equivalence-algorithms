@@ -1,5 +1,6 @@
 #include "equivalence_api.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <charconv>
 #include <cctype>
@@ -30,6 +31,7 @@ struct CliOptions {
     std::optional<std::uint32_t> codomain_dimension;
     std::uint32_t threads = 0;
     affine::api::EquivalenceKind kind = affine::api::EquivalenceKind::Affine;
+    bool all_solutions = false;
     bool help = false;
 };
 
@@ -41,6 +43,7 @@ void print_usage()
         << "  --type affine|linear  Equivalence type (default: affine)\n"
         << "  --codomain-dim M      Codomain dimension (default: domain dimension)\n"
         << "  --threads auto|N      Number of worker threads (default: auto)\n"
+        << "  --all-solutions       Print every equivalence\n"
         << "  -h, --help            Show this help\n";
 }
 
@@ -71,6 +74,8 @@ void print_usage()
         const std::string_view argument(argv[index]);
         if (argument == "-h" || argument == "--help") {
             options.help = true;
+        } else if (argument == "--all-solutions") {
+            options.all_solutions = true;
         } else if (argument == "--type"
             || argument == "--codomain-dim"
             || argument == "--threads") {
@@ -216,9 +221,15 @@ int main(int argc, char** argv)
         std::cout << "equivalent: " << (solutions.empty() ? "no" : "yes")
                   << '\n'
                   << "solutions: " << solutions.size() << '\n';
-        if (!solutions.empty()) {
-            print_map("domain map", solutions.front().domain_map);
-            print_map("codomain map", solutions.front().codomain_map);
+        const std::size_t shown = options.all_solutions
+            ? solutions.size()
+            : std::min<std::size_t>(solutions.size(), 1);
+        for (std::size_t index = 0; index < shown; ++index) {
+            const std::string prefix = options.all_solutions
+                ? "solution " + std::to_string(index) + " "
+                : "";
+            print_map(prefix + "domain map", solutions[index].domain_map);
+            print_map(prefix + "codomain map", solutions[index].codomain_map);
         }
         return 0;
     } catch (const std::exception& error) {
