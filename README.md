@@ -39,6 +39,7 @@ On Windows, use `.\aleq.cmd` instead of `./aleq`.
 
 ```text
 aleq LEFT RIGHT [--type affine|linear] [--codomain-dim M] [--threads auto|N] [--all-solutions]
+aleq TABLE --self [--generators|--all-solutions] [--type affine|linear] [--threads auto|N]
 ```
 
 The domain dimension is inferred from the truth-table length. The codomain
@@ -60,6 +61,17 @@ The first command reports an affine equivalence; the second reports that the
 same functions are not linearly equivalent. The program reports the number of
 solutions and prints one witness, or every witness with `--all-solutions`.
 
+For self-equivalences, pass one table with `--self`:
+
+```sh
+aleq examples/identity_2.tt --self
+aleq examples/identity_2.tt --self --all-solutions
+```
+
+The first command prints a set of generators for the self-equivalence group.
+The second prints every group element. `--generators` may be added explicitly,
+but it is the default with `--self`.
+
 `--threads auto` uses the available hardware concurrency. Use `--threads N`
 to select a fixed number of workers.
 
@@ -76,20 +88,27 @@ ctest --test-dir build -C Release --output-on-failure
 From the repository root, start Sage and import the wrapper:
 
 ```python
-from f2_equivalence import find_equivalence, self_equivalences
+from f2_equivalence import find_equivalence, self_equivalence_group
 
 identity = [0, 1, 2, 3]
 translated = [1, 0, 3, 2]
 
 result = find_equivalence(identity, translated)
-linear_self_equivalences = self_equivalences(identity, kind="linear")
+group = self_equivalence_group(identity, kind="linear")
+group.order()  # 6
+group.gens()
 ```
 
 `find_equivalence` returns one witness and the total solution count, or `None`
 when the functions are not equivalent. `equivalences` returns every witness,
 and `self_equivalences` returns every equivalence of a function with itself.
-Use `kind="linear"` for linear equivalence. `is_equivalent` returns only a
-Boolean.
+`self_equivalence_group` returns an actual Sage permutation group built from
+the C++ generator set; `automorphism_group` is a shorter alias. Use
+`kind="linear"` for linear equivalence. `is_equivalent` returns only a Boolean.
+
+The group acts on the domain points followed by the codomain points. Sage label
+`x + 1` represents domain point `x`; the codomain labels follow the domain
+block.
 
 The first call finds an installed or previously built `aleq`; if necessary, it
 builds the executable automatically with CMake. Pass `executable="..."` only to
@@ -106,3 +125,24 @@ sage sage_example.sage
 `src/equivalence_api.hpp` contains the small reusable C++ entry point used by
 the command line program. `affine::api::find_equivalences` accepts two truth
 tables, dimensions, the affine/linear mode, and a thread count.
+
+To get generators for a self-equivalence group:
+
+```cpp
+const std::vector<std::uint32_t> table { 0, 1, 2, 3 };
+const affine::api::EquivalenceProblem problem {
+    .domain_dimension = 2,
+    .codomain_dimension = 2,
+    .left_table = table,
+    .right_table = table,
+};
+
+const affine::api::SelfEquivalenceGroup group =
+    affine::api::find_self_equivalence_group(problem);
+
+// group.order contains the number of self-equivalences.
+// group.generators contains a generating set of map pairs.
+```
+
+Use `find_equivalences(problem)` instead when every self-equivalence is needed.
+Set `SearchOptions::kind` to `EquivalenceKind::Linear` for the linear group.

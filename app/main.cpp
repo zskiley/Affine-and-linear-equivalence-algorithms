@@ -11,6 +11,7 @@
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -31,6 +32,8 @@ struct CliOptions {
     std::optional<std::uint32_t> codomain_dimension;
     std::uint32_t threads = 0;
     affine::api::EquivalenceKind kind = affine::api::EquivalenceKind::Affine;
+    bool self_equivalence = false;
+    bool generators = false;
     bool all_solutions = false;
     bool help = false;
 };
@@ -38,11 +41,15 @@ struct CliOptions {
 void print_usage()
 {
     std::cout
-        << "Usage: aleq LEFT RIGHT [options]\n\n"
+        << "Usage:\n"
+        << "  aleq LEFT RIGHT [options]\n"
+        << "  aleq TABLE --self [--generators|--all-solutions] [options]\n\n"
         << "Options:\n"
         << "  --type affine|linear  Equivalence type (default: affine)\n"
         << "  --codomain-dim M      Codomain dimension (default: domain dimension)\n"
         << "  --threads auto|N      Number of worker threads (default: auto)\n"
+        << "  --self                Find self-equivalences of one table\n"
+        << "  --generators          Print group generators (default with --self)\n"
         << "  --all-solutions       Print every equivalence\n"
         << "  -h, --help            Show this help\n";
 }
@@ -74,6 +81,10 @@ void print_usage()
         const std::string_view argument(argv[index]);
         if (argument == "-h" || argument == "--help") {
             options.help = true;
+        } else if (argument == "--self") {
+            options.self_equivalence = true;
+        } else if (argument == "--generators") {
+            options.generators = true;
         } else if (argument == "--all-solutions") {
             options.all_solutions = true;
         } else if (argument == "--type"
@@ -106,12 +117,25 @@ void print_usage()
         }
     }
 
-    if (!options.help && positional.size() != 2) {
-        throw CliError("expected LEFT and RIGHT truth-table paths");
+    if (!options.help && options.generators && !options.self_equivalence) {
+        throw CliError("--generators requires --self");
     }
-    if (positional.size() == 2) {
+    if (!options.help && options.generators && options.all_solutions) {
+        throw CliError("--generators and --all-solutions are mutually exclusive");
+    }
+
+    const std::size_t expected_paths = options.self_equivalence ? 1u : 2u;
+    if (!options.help && positional.size() != expected_paths) {
+        throw CliError(
+            options.self_equivalence
+                ? "expected one truth-table path with --self"
+                : "expected LEFT and RIGHT truth-table paths");
+    }
+    if (positional.size() == expected_paths && !positional.empty()) {
         options.left_path = std::move(positional[0]);
-        options.right_path = std::move(positional[1]);
+        if (!options.self_equivalence) {
+            options.right_path = std::move(positional[1]);
+        }
     }
     return options;
 }
@@ -196,27 +220,56 @@ int main(int argc, char** argv)
 
         const std::vector<std::uint32_t> left =
             read_truth_table(options.left_path);
-        const std::vector<std::uint32_t> right =
-            read_truth_table(options.right_path);
-        if (left.size() != right.size()) {
+        std::vector<std::uint32_t> right;
+        if (!options.self_equivalence) {
+            right = read_truth_table(options.right_path);
+        }
+        if (!options.self_equivalence && left.size() != right.size()) {
             throw CliError("truth tables must have the same length");
         }
 
         const std::uint32_t domain_dimension =
             infer_domain_dimension(left.size());
+        const std::span<const std::uint32_t> right_table =
+            options.self_equivalence
+                ? std::span<const std::uint32_t>(left)
+                : std::span<const std::uint32_t>(right);
+        const affine::api::EquivalenceProblem problem {
+            .domain_dimension = domain_dimension,
+            .codomain_dimension =
+                options.codomain_dimension.value_or(domain_dimension),
+            .left_table = left,
+            .right_table = right_table,
+        };
+        const affine::api::SearchOptions search_options {
+            .threads = options.threads,
+            .kind = options.kind,
+        };
+
+        if (options.self_equivalence && !options.all_solutions) {
+            const affine::api::SelfEquivalenceGroup group =
+                affine::api::find_self_equivalence_group(
+                    problem, search_options);
+            std::cout << "equivalent: " << (group.order == 0 ? "no" : "yes")
+                      << '\n'
+                      << "solutions: " << group.order << '\n'
+                      << "generators: " << group.generators.size() << '\n';
+            for (std::size_t index = 0; index < group.generators.size(); ++index) {
+                const std::string prefix =
+                    "generator " + std::to_string(index) + " ";
+                print_map(
+                    prefix + "domain map",
+                    group.generators[index].domain_map);
+                print_map(
+                    prefix + "codomain map",
+                    group.generators[index].codomain_map);
+            }
+            return 0;
+        }
+
         const std::vector<affine::Solution> solutions =
             affine::api::find_equivalences(
-                affine::api::EquivalenceProblem {
-                    .domain_dimension = domain_dimension,
-                    .codomain_dimension =
-                        options.codomain_dimension.value_or(domain_dimension),
-                    .left_table = left,
-                    .right_table = right,
-                },
-                affine::api::SearchOptions {
-                    .threads = options.threads,
-                    .kind = options.kind,
-                });
+                problem, search_options);
 
         std::cout << "equivalent: " << (solutions.empty() ? "no" : "yes")
                   << '\n'
