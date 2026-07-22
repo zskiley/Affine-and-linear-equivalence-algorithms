@@ -181,7 +181,8 @@ public:
         {
             profile::ScopedTimer timer(profile::counters.group_add_precheck_ns);
             const std::shared_ptr<const SchreierSims> membership =
-                published_membership_.load(std::memory_order_acquire);
+                std::atomic_load_explicit(
+                    &published_membership_, std::memory_order_acquire);
             if (membership != nullptr && membership->contains(map)) {
                 profile::count(profile::counters.group_add_membership_hits);
                 remember_generated(key);
@@ -234,7 +235,8 @@ public:
     {
         profile::ScopedTimer timer(profile::counters.group_snapshot_ns);
         const std::shared_ptr<const AffineGroupSnapshot> published =
-            published_snapshot_.load(std::memory_order_acquire);
+            std::atomic_load_explicit(
+                &published_snapshot_, std::memory_order_acquire);
         if (published == nullptr) {
             profile::count(profile::counters.group_snapshot_calls);
             return {};
@@ -299,12 +301,14 @@ private:
     {
         std::shared_ptr<const AffineGroupSnapshot> snapshot =
             make_snapshot_locked(version);
-        published_snapshot_.store(std::move(snapshot), std::memory_order_release);
+        std::atomic_store_explicit(
+            &published_snapshot_, std::move(snapshot), std::memory_order_release);
         std::shared_ptr<const SchreierSims> membership =
             dim_ == unset_dim
                 ? nullptr
                 : std::make_shared<SchreierSims>(schreier_sims_);
-        published_membership_.store(
+        std::atomic_store_explicit(
+            &published_membership_,
             std::move(membership),
             std::memory_order_release);
     }
@@ -315,8 +319,8 @@ private:
     std::unordered_set<AffineGroupKey, AffineGroupKeyHash> known_;
     std::unordered_set<AffineGroupKey, AffineGroupKeyHash> generated_members_;
     SchreierSims schreier_sims_;
-    mutable std::atomic<std::shared_ptr<const AffineGroupSnapshot>> published_snapshot_;
-    mutable std::atomic<std::shared_ptr<const SchreierSims>> published_membership_;
+    mutable std::shared_ptr<const AffineGroupSnapshot> published_snapshot_;
+    mutable std::shared_ptr<const SchreierSims> published_membership_;
     std::atomic<std::uint64_t> version_ = 0;
     static constexpr std::uint32_t unset_dim = std::numeric_limits<std::uint32_t>::max();
     std::uint32_t dim_ = unset_dim;
