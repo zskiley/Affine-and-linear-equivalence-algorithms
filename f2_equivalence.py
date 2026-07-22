@@ -1,8 +1,72 @@
-"""Small Sage interface for the aleq command-line program."""
+"""Sage interface for affine and linear equivalence over F2."""
 
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
+
+
+_ROOT = Path(__file__).resolve().parent
+
+
+def _resolve_executable(executable):
+    if executable is not None:
+        return str(executable)
+
+    candidates = [
+        _ROOT / "build" / "aleq",
+        _ROOT / "build" / "aleq.exe",
+        _ROOT / "build" / "Release" / "aleq",
+        _ROOT / "build" / "Release" / "aleq.exe",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+
+    installed = shutil.which("aleq")
+    if installed is not None:
+        return installed
+
+    try:
+        subprocess.run(
+            [
+                "cmake",
+                "-S",
+                str(_ROOT),
+                "-B",
+                str(_ROOT / "build"),
+                "-DBUILD_TESTING=OFF",
+                "-DCMAKE_BUILD_TYPE=Release",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        subprocess.run(
+            [
+                "cmake",
+                "--build",
+                str(_ROOT / "build"),
+                "--config",
+                "Release",
+                "--target",
+                "aleq",
+                "--parallel",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as error:
+        raise RuntimeError("CMake is required to build aleq") from error
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or error.stdout or "").strip()
+        raise RuntimeError("could not build aleq: " + detail) from error
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise RuntimeError("aleq was built but its executable could not be found")
 
 
 def _read_map(values, name):
@@ -44,7 +108,7 @@ def _run(
         right_path.write_text(" ".join(map(str, right)), encoding="ascii")
 
         command = [
-            str(executable),
+            _resolve_executable(executable),
             str(left_path),
             str(right_path),
             "--type",
@@ -85,7 +149,7 @@ def find_equivalences(
     kind="affine",
     codomain_dimension=None,
     threads="auto",
-    executable="aleq",
+    executable=None,
 ):
     """Return all affine or linear equivalences between two truth tables."""
     values = _run(
@@ -114,7 +178,7 @@ def find_equivalence(
     kind="affine",
     codomain_dimension=None,
     threads="auto",
-    executable="aleq",
+    executable=None,
 ):
     """Return one equivalence and the total count, or ``None``."""
     values = _run(
@@ -143,3 +207,7 @@ def find_self_equivalences(table, **options):
 def is_equivalent(*args, **kwargs):
     """Return whether the two truth tables are equivalent."""
     return find_equivalence(*args, **kwargs) is not None
+
+
+equivalences = find_equivalences
+self_equivalences = find_self_equivalences

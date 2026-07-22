@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aleq_sage import find_equivalence, find_self_equivalences
+from f2_equivalence import find_equivalence, self_equivalences
 
 
 executable = sys.argv[1]
@@ -29,7 +29,7 @@ linear = find_equivalence(
 )
 assert linear is None
 
-affine_self_equivalences = find_self_equivalences(
+affine_self_equivalences = self_equivalences(
     identity,
     kind="affine",
     threads=2,
@@ -37,7 +37,7 @@ affine_self_equivalences = find_self_equivalences(
 )
 assert len(affine_self_equivalences) == 24
 
-linear_self_equivalences = find_self_equivalences(
+linear_self_equivalences = self_equivalences(
     identity,
     kind="linear",
     threads=4,

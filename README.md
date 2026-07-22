@@ -55,36 +55,33 @@ to select a fixed number of workers.
 
 ## Sage API
 
-After building `aleq`, import the small Sage wrapper from the repository root:
+From the repository root, start Sage and import the wrapper:
 
 ```python
-from aleq_sage import find_equivalence, find_self_equivalences, is_equivalent
+from f2_equivalence import find_equivalence, self_equivalences
 
 identity = [0, 1, 2, 3]
 translated = [1, 0, 3, 2]
 
-result = find_equivalence(
-    identity,
-    translated,
-    kind="affine",
-    executable="./build/aleq",
-)
-
-linear_self_equivalences = find_self_equivalences(
-    identity,
-    kind="linear",
-    executable="./build/aleq",
-)
+result = find_equivalence(identity, translated)
+linear_self_equivalences = self_equivalences(identity, kind="linear")
 ```
 
 `find_equivalence` returns one witness and the total solution count, or `None`
-when the functions are not equivalent. `find_equivalences` returns every
-witness, and `find_self_equivalences` returns every equivalence of a function
-with itself. Use `kind="linear"` for linear equivalence. `is_equivalent` returns
-only a Boolean.
+when the functions are not equivalent. `equivalences` returns every witness,
+and `self_equivalences` returns every equivalence of a function with itself.
+Use `kind="linear"` for linear equivalence. `is_equivalent` returns only a
+Boolean.
 
-The wrapper uses only Sage's Python standard library and calls the same `aleq`
-executable as the command line interface.
+The first call finds an installed or previously built `aleq`; if necessary, it
+builds the executable automatically with CMake. Pass `executable="..."` only to
+select a custom binary.
+
+A complete runnable example is in `sage_example.sage`:
+
+```sh
+sage sage_example.sage
+```
 
 ## C++ API
 
