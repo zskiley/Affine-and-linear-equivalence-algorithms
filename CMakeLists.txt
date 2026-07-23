@@ -158,6 +158,47 @@ set_tests_properties(
 )
 
 add_test(
+    NAME aleq_aes_affine_equivalence
+    COMMAND aleq examples/gf256_inverse.tt examples/aes_sbox.tt
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_aes_affine_equivalence
+    PROPERTIES PASS_REGULAR_EXPRESSION "equivalent: yes"
+)
+
+add_test(
+    NAME aleq_aes_linear_nonequivalence
+    COMMAND aleq examples/gf256_inverse.tt examples/aes_sbox.tt --linear
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_aes_linear_nonequivalence
+    PROPERTIES PASS_REGULAR_EXPRESSION "equivalent: no"
+)
+
+add_test(
+    NAME aleq_des_s1_affine_equivalence
+    COMMAND aleq examples/des_s1.tt examples/des_s1_affine_equivalent.tt
+            --codomain-dim 4
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_des_s1_affine_equivalence
+    PROPERTIES PASS_REGULAR_EXPRESSION "equivalent: yes"
+)
+
+add_test(
+    NAME aleq_gold_x3_self
+    COMMAND aleq examples/gold_x3_gf32.tt --self --all
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_gold_x3_self
+    PROPERTIES PASS_REGULAR_EXPRESSION "self-equivalences: 155"
+)
+
+add_test(
     NAME aleq_show_witness
     COMMAND aleq examples/identity_3.tt examples/affine_translate_3.tt --show
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

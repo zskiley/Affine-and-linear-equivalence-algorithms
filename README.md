@@ -154,6 +154,37 @@ Files in `examples/` can be used immediately, for example:
 ./aleq examples/identity_3.tt --self --all
 ```
 
+## Larger Examples
+
+The AES S-box is affinely, but not linearly, equivalent to inversion in the
+AES field:
+
+```bash
+./aleq examples/gf256_inverse.tt examples/aes_sbox.tt
+./aleq examples/gf256_inverse.tt examples/aes_sbox.tt --linear
+```
+
+The first command prints `equivalent: yes`; the second prints
+`equivalent: no`.
+
+DES S1 is a function from 6 bits to 4 bits. The second table applies affine
+changes on both its input and output:
+
+```bash
+./aleq examples/des_s1.tt examples/des_s1_affine_equivalent.tt \
+    --codomain-dim 4
+```
+
+The Gold APN function `z -> z^3` on `GF(2^5)`, represented using the field
+polynomial `t^5 + t^2 + 1`, has a nontrivial self-equivalence group:
+
+```bash
+./aleq examples/gold_x3_gf32.tt --self
+./aleq examples/gold_x3_gf32.tt --self --all
+```
+
+These print `generators: 2` and `self-equivalences: 155`.
+
 ## SageMath
 
 The Sage interface accepts truth tables directly as lists. It builds `aleq`
