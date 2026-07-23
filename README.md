@@ -3,6 +3,10 @@
 A C++20 implementation of affine and linear equivalence algorithms for
 vectorial Boolean functions from `F_2^n` to `F_2^m`.
 
+> **Use `aleq` for normal use.** The older `affine_equiv` program is an
+> internal diagnostic tool and prints search timings, node counts, branching
+> information, and other implementation details.
+
 ## Build
 
 The only requirements are CMake and a C++20 compiler. Build the program with
@@ -28,6 +32,9 @@ The launchers rebuild automatically when the source changes and pass any
 arguments to the `aleq` program.
 
 ## Command-Line Usage
+
+All commands below use the public `aleq` interface. On Windows PowerShell,
+replace `./aleq` with `.\aleq.cmd`.
 
 Test affine equivalence:
 
@@ -61,15 +68,31 @@ The domain dimension is inferred from the table length. For a function from
 ./aleq F.tt G.tt --codomain-dim M
 ```
 
-Normal output is deliberately short:
+Normal output is deliberately short. An equivalence test prints exactly one
+of these lines:
 
 ```text
 equivalent: yes
+equivalent: no
 ```
 
-Self-equivalence mode prints `generators: N`, the size of the paired generating
-set (which is not necessarily minimal). `--all` prints the number of elements
-enumerated. Internal search counters and raw affine-map columns are not printed.
+Self-equivalence mode prints:
+
+```text
+generators: N
+```
+
+The number is the size of the paired generating set, which is not necessarily
+minimal. With `--all`, the program prints only the number of elements it
+enumerated:
+
+```text
+self-equivalences: N
+equivalences: N
+```
+
+`aleq` never prints internal timings, search-node counts, branch policies, or
+raw affine-map columns.
 
 ## Input Format
 
@@ -89,8 +112,6 @@ Files in `examples/` can be used immediately, for example:
 ./aleq examples/identity_3.tt examples/affine_translate_3.tt
 ./aleq examples/identity_3.tt --self --all
 ```
-
-In PowerShell, use `.\aleq.cmd` in place of `./aleq`.
 
 ## C++ API
 
@@ -137,7 +158,8 @@ affine::api::SearchOptions {
 
 See `examples/rectangular_api.cpp` for a complete small example.
 
-## Diagnostic Tool
+## Internal Diagnostic Tool
 
-The older `affine_equiv` executable remains available for profiling and
-branch-policy experiments. Most users only need `aleq` or the C++ API.
+`affine_equiv` is retained only for development, profiling, and branch-policy
+experiments. Its verbose key-value output is not part of the public interface.
+Users should run `aleq` or use `equivalence_api.hpp` instead.
