@@ -3,11 +3,22 @@ set -eu
 
 root=$(CDPATH= cd "$(dirname "$0")" && pwd)
 build="$root/build"
+build_log="$build/.aleq-build.log"
+
+run_quietly() {
+    if ! "$@" >"$build_log" 2>&1; then
+        cat "$build_log" >&2
+        rm -f "$build_log"
+        return 1
+    fi
+}
 
 if [ ! -f "$build/CMakeCache.txt" ]; then
-    cmake -S "$root" -B "$build" -DCMAKE_BUILD_TYPE=Release
+    mkdir -p "$build"
+    run_quietly cmake -S "$root" -B "$build" -DCMAKE_BUILD_TYPE=Release
 fi
-cmake --build "$build" --config Release --target aleq --parallel
+run_quietly cmake --build "$build" --config Release --target aleq --parallel
+rm -f "$build_log"
 
 exe=
 if [ -x "$build/aleq.exe" ]; then
