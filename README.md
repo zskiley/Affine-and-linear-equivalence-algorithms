@@ -40,19 +40,6 @@ Then run an included example:
 ./aleq examples/identity_3.tt examples/affine_translate_3.tt
 ```
 
-There is no separate installation step. Both launchers configure and rebuild
-the program automatically when needed. To update an existing clone, run:
-
-```bash
-git pull
-```
-
-To build and run all included checks, use:
-
-```bash
-cmake -P run_examples.cmake
-```
-
 ### SageMath
 
 The Sage interface does not need a separate build command:
