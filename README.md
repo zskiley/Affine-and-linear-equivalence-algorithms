@@ -3,10 +3,6 @@
 A C++20 implementation of affine and linear equivalence algorithms for
 vectorial Boolean functions from `F_2^n` to `F_2^m`.
 
-> **Use `aleq` for normal use.** The older `affine_equiv` program is an
-> internal diagnostic tool and prints search timings, node counts, branching
-> information, and other implementation details.
-
 ## Build
 
 The only requirements are CMake and a C++20 compiler. Build the program with
@@ -157,9 +153,3 @@ affine::api::SearchOptions {
 ```
 
 See `examples/rectangular_api.cpp` for a complete small example.
-
-## Internal Diagnostic Tool
-
-`affine_equiv` is retained only for development, profiling, and branch-policy
-experiments. Its verbose key-value output is not part of the public interface.
-Users should run `aleq` or use `equivalence_api.hpp` instead.
