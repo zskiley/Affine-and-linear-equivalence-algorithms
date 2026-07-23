@@ -23,6 +23,7 @@ struct CliOptions {
     bool self = false;
     bool linear = false;
     bool all = false;
+    bool show = false;
     bool help = false;
 };
 
@@ -30,12 +31,15 @@ void print_usage(std::ostream& output)
 {
     output
         << "Usage:\n"
-        << "  aleq F.tt G.tt [--linear] [--all] [--codomain-dim M]\n"
-        << "  aleq F.tt --self [--linear] [--all] [--codomain-dim M]\n\n"
+        << "  aleq F.tt G.tt [--linear] [--all] [--show]"
+           " [--codomain-dim M]\n"
+        << "  aleq F.tt --self [--linear] [--all] [--show]"
+           " [--codomain-dim M]\n\n"
         << "Options:\n"
         << "  --self              compute self-equivalences of F\n"
         << "  --linear            use linear instead of affine equivalence\n"
         << "  --all               enumerate and count every equivalence\n"
+        << "  --show              print the selected maps\n"
         << "  --codomain-dim M    use functions from F_2^n to F_2^M\n"
         << "  --help               show this help text\n";
 }
@@ -65,6 +69,8 @@ void print_usage(std::ostream& output)
             options.linear = true;
         } else if (arg == "--all") {
             options.all = true;
+        } else if (arg == "--show") {
+            options.show = true;
         } else if (arg == "--codomain-dim") {
             if (++index >= argc) {
                 throw std::runtime_error("--codomain-dim requires a value");
@@ -147,14 +153,65 @@ void print_usage(std::ostream& output)
     return dimension;
 }
 
+void print_affine_map(
+    std::string_view label,
+    const affine::f2::AffineMap& map);
+
 [[nodiscard]] std::size_t count_all(
-    affine::api::EquivalenceGenerator& generator)
+    affine::api::EquivalenceGenerator& generator,
+    bool show,
+    std::string_view label)
 {
     std::size_t count = 0;
-    while (generator.next().has_value()) {
+    while (std::optional<affine::Solution> equivalence = generator.next()) {
         ++count;
+        if (show) {
+            std::cout << label << ' ' << count << ":\n";
+            print_affine_map("domain", equivalence->domain_map);
+            print_affine_map("codomain", equivalence->codomain_map);
+        }
     }
     return count;
+}
+
+void print_binary_vector(std::uint32_t value, std::uint32_t dimension)
+{
+    std::cout << '[';
+    for (std::uint32_t bit = 0; bit < dimension; ++bit) {
+        if (bit != 0) {
+            std::cout << ' ';
+        }
+        std::cout << ((value >> bit) & 1u);
+    }
+    std::cout << "]\n";
+}
+
+void print_affine_map(
+    std::string_view label,
+    const affine::f2::AffineMap& map)
+{
+    std::cout << "  " << label << " matrix:\n";
+    for (std::uint32_t row = 0; row < map.dim; ++row) {
+        std::cout << "    [";
+        for (std::uint32_t column = 0; column < map.dim; ++column) {
+            if (column != 0) {
+                std::cout << ' ';
+            }
+            std::cout << ((map.basis_images[column] >> row) & 1u);
+        }
+        std::cout << "]\n";
+    }
+    std::cout << "  " << label << " translation: ";
+    print_binary_vector(map.translation, map.dim);
+}
+
+void print_paired_map(
+    std::string_view heading,
+    const affine::group::PairedAffineMap& map)
+{
+    std::cout << heading << ":\n";
+    print_affine_map("domain", map.domain_map);
+    print_affine_map("codomain", map.codomain_map);
 }
 
 } // namespace
@@ -188,9 +245,22 @@ int main(int argc, char** argv)
                     left,
                     search_options);
             if (options.all) {
-                std::cout << "self-equivalences: "
-                          << count_all(generator) << '\n';
+                const std::size_t count = count_all(
+                    generator,
+                    options.show,
+                    "self-equivalence");
+                std::cout << "self-equivalences: " << count << '\n';
             } else {
+                if (options.show) {
+                    std::size_t index = 0;
+                    for (const affine::group::PairedAffineMap& group_generator :
+                         generator.paired_group_generators()) {
+                        ++index;
+                        print_paired_map(
+                            "generator " + std::to_string(index),
+                            group_generator);
+                    }
+                }
                 std::cout << "generators: "
                           << generator.paired_group_generators().size()
                           << '\n';
@@ -208,11 +278,17 @@ int main(int argc, char** argv)
                 right,
                 search_options);
         if (options.all) {
-            std::cout << "equivalences: " << count_all(generator) << '\n';
+            const std::size_t count =
+                count_all(generator, options.show, "equivalence");
+            std::cout << "equivalences: " << count << '\n';
         } else {
+            const affine::group::PairedAffineMap* witness = generator.witness();
             std::cout << "equivalent: "
-                      << (generator.witness() == nullptr ? "no" : "yes")
+                      << (witness == nullptr ? "no" : "yes")
                       << '\n';
+            if (options.show && witness != nullptr) {
+                print_paired_map("witness", *witness);
+            }
         }
         return 0;
     } catch (const std::exception& error) {

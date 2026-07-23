@@ -138,6 +138,38 @@ set_tests_properties(
 )
 
 add_test(
+    NAME aleq_show_witness
+    COMMAND aleq examples/identity_3.tt examples/affine_translate_3.tt --show
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_show_witness
+    PROPERTIES PASS_REGULAR_EXPRESSION "witness:"
+)
+
+add_test(
+    NAME aleq_show_generators
+    COMMAND aleq examples/identity_3.tt --self --show
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_show_generators
+    PROPERTIES PASS_REGULAR_EXPRESSION "generator 1:"
+)
+
+add_test(
+    NAME aleq_show_all
+    COMMAND aleq examples/embedding_1_to_2.tt
+            examples/embedding_1_to_2_alt.tt
+            --codomain-dim 2 --all --show
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+set_tests_properties(
+    aleq_show_all
+    PROPERTIES PASS_REGULAR_EXPRESSION "equivalence 4:"
+)
+
+add_test(
     NAME aleq_invalid_arguments
     COMMAND aleq examples/identity_3.tt
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

@@ -57,6 +57,18 @@ Enumerate and count every self-equivalence or equivalence:
 ./aleq F.tt G.tt --all
 ```
 
+Print the actual maps:
+
+```bash
+./aleq F.tt G.tt --show
+./aleq F.tt --self --show
+./aleq F.tt G.tt --all --show
+```
+
+Without `--all`, `--show` prints one witness for an equivalence test or the
+paired generators for a self-equivalence search. Together, `--all --show`
+prints every equivalence as it is generated.
+
 The domain dimension is inferred from the table length. For a function from
 `F_2^n` to `F_2^m` with `m != n`, specify `m`:
 
@@ -89,6 +101,12 @@ equivalences: N
 
 `aleq` never prints internal timings, search-node counts, branch policies, or
 raw affine-map columns.
+
+When `--show` is present, each affine map is displayed as a binary matrix and
+a binary translation vector. Coordinates are listed from lowest-index bit to
+highest-index bit. A displayed map acts as `x -> Mx + t` over `F_2`. The
+domain map `A` and codomain map `B` satisfy
+`B(F(x)) = G(A(x))`.
 
 ## Input Format
 
