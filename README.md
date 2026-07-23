@@ -3,29 +3,69 @@
 A C++20 implementation of affine and linear equivalence algorithms for
 vectorial Boolean functions from `F_2^n` to `F_2^m`.
 
-## Build
+## Getting Started from Git
 
-The only requirements are CMake and a C++20 compiler. Build the program with
-one command:
+Install Git, CMake 3.20 or newer, and a C++20 compiler. SageMath is only
+required for the Sage interface.
+
+### Windows PowerShell
+
+Clone the repository, enter it, and build:
 
 ```powershell
+git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
+cd Affine-and-linear-equivalence-algorithms
 .\aleq.cmd
 ```
 
-or on macOS and Linux:
+Then run an included example:
+
+```powershell
+.\aleq.cmd examples\identity_3.tt examples\affine_translate_3.tt
+```
+
+### macOS and Linux
+
+Clone the repository, enter it, and build:
 
 ```bash
+git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
+cd Affine-and-linear-equivalence-algorithms
 ./aleq
 ```
 
-To build and run all included checks instead, use:
+Then run an included example:
+
+```bash
+./aleq examples/identity_3.tt examples/affine_translate_3.tt
+```
+
+There is no separate installation step. Both launchers configure and rebuild
+the program automatically when needed. To update an existing clone, run:
+
+```bash
+git pull
+```
+
+To build and run all included checks, use:
 
 ```bash
 cmake -P run_examples.cmake
 ```
 
-The launchers rebuild automatically when the source changes and pass any
-arguments to the `aleq` program.
+### SageMath
+
+The Sage interface does not need a separate build command:
+
+```bash
+git clone https://github.com/zskiley/Affine-and-linear-equivalence-algorithms.git
+cd Affine-and-linear-equivalence-algorithms
+sage sage_example.sage
+```
+
+The first Sage call builds `aleq` automatically. CMake and the C++ compiler
+must be available in the same environment as Sage. On Windows, run this inside
+the environment where Sage is installed, normally WSL.
 
 ## Command-Line Usage
 
