@@ -77,6 +77,26 @@ add_test(
     COMMAND equivalence_api_tests
 )
 
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_Interpreter_FOUND)
+    add_test(
+        NAME sage_wrapper_parser
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/sage_api_tests.py
+                $<TARGET_FILE:aleq>
+    )
+endif()
+
+find_program(SageMath_EXECUTABLE NAMES sage)
+if (SageMath_EXECUTABLE)
+    add_test(
+        NAME sage_public_api
+        COMMAND ${SageMath_EXECUTABLE} -python
+                ${CMAKE_CURRENT_SOURCE_DIR}/tests/sage_public_api_tests.py
+                $<TARGET_FILE:aleq>
+    )
+endif()
+
 add_test(
     NAME rectangular_api_example
     COMMAND rectangular_api_example

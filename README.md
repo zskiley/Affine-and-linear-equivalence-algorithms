@@ -127,6 +127,42 @@ Files in `examples/` can be used immediately, for example:
 ./aleq examples/identity_3.tt --self --all
 ```
 
+## SageMath
+
+The Sage interface accepts truth tables directly as lists. It builds `aleq`
+automatically on the first call:
+
+```python
+from f2_equivalence import find_equivalence, self_equivalence_group
+
+F = [0, 1, 2, 3]
+G = [1, 0, 3, 2]
+
+witness = find_equivalence(F, G)
+print(witness.domain)
+print(witness.codomain)
+
+H = self_equivalence_group(F)
+print(H.order())
+print(H.gens())
+```
+
+`find_equivalence` returns `None` when the functions are not equivalent.
+Otherwise, its `domain` and `codomain` fields are Sage affine maps.
+`self_equivalence_group` returns an actual Sage permutation group. Each group
+generator represents a paired domain and codomain map, so the pairing is not
+lost. In this permutation action, labels `1, ..., 2^n` are domain points and
+the following `2^m` labels are codomain points.
+
+Use `linear=True` for linear equivalence. For functions from `F_2^n` to
+`F_2^m` with `m != n`, pass `codomain_dimension=m`.
+
+Run the included example from the repository directory:
+
+```bash
+sage sage_example.sage
+```
+
 ## C++ API
 
 Include `equivalence_api.hpp`. The two public functions return an

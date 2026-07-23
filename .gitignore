@@ -27,3 +27,5 @@ benchmark_runs/
 *.tmp
 Thumbs.db
 Desktop.ini
+__pycache__/
+*.py[cod]
