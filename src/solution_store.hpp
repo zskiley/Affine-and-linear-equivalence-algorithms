@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <unordered_set>
 #include <utility>
@@ -233,6 +234,15 @@ public:
     [[nodiscard]] bool empty() const
     {
         return size() == 0;
+    }
+
+    [[nodiscard]] std::optional<Solution> first_solution() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (solutions_.empty()) {
+            return std::nullopt;
+        }
+        return solutions_.front();
     }
 
 private:

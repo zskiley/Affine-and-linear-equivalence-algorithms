@@ -1,112 +1,143 @@
 # Affine and Linear Equivalence Algorithms
 
-This repository contains a C++20 implementation of partition-refinement and
-depth-first-search algorithms for linear and affine equivalence of vectorial
-Boolean functions over `F_2^n`.
+A C++20 implementation of affine and linear equivalence algorithms for
+vectorial Boolean functions from `F_2^n` to `F_2^m`.
 
-The submission entry point is the `affine_equiv` command-line tool.
+## Build
 
-## Quick Start
+The only requirements are CMake and a C++20 compiler. Build the program with
+one command:
 
-The code has no external library dependency beyond a C++20 compiler and CMake.
-Run the included script to build the tool and check the examples:
+```powershell
+.\aleq.cmd
+```
+
+or on macOS and Linux:
+
+```bash
+./aleq
+```
+
+To build and run all included checks instead, use:
 
 ```bash
 cmake -P run_examples.cmake
 ```
 
-The important output line for equivalence tests is:
+The launchers rebuild automatically when the source changes and pass any
+arguments to the `aleq` program.
 
-```text
-found=1
+## Command-Line Usage
+
+Test affine equivalence:
+
+```bash
+./aleq F.tt G.tt
 ```
 
-which means that an equivalence was found.
+Test linear equivalence:
+
+```bash
+./aleq F.tt G.tt --linear
+```
+
+Compute the number of paired generators for the self-equivalence group:
+
+```bash
+./aleq F.tt --self
+```
+
+Enumerate and count every self-equivalence or equivalence:
+
+```bash
+./aleq F.tt --self --all
+./aleq F.tt G.tt --all
+```
+
+The domain dimension is inferred from the table length. For a function from
+`F_2^n` to `F_2^m` with `m != n`, specify `m`:
+
+```bash
+./aleq F.tt G.tt --codomain-dim M
+```
+
+Normal output is deliberately short:
+
+```text
+equivalent: yes
+```
+
+Self-equivalence mode prints `generators: N`, the size of the paired generating
+set (which is not necessarily minimal). `--all` prints the number of elements
+enumerated. Internal search counters and raw affine-map columns are not printed.
 
 ## Input Format
 
-A function is given by its truth table as whitespace- or comma-separated
-nonnegative integers. For an `n -> n` function, the file must contain exactly
-`2^n` values, each in `[0, 2^n)`.
+A truth-table file contains whitespace- or comma-separated nonnegative
+integers. A function from `F_2^n` to `F_2^m` requires exactly `2^n` values,
+each in `[0, 2^m)`.
 
-Example, the identity function on `F_2^3`:
+The identity function on `F_2^3` is:
 
 ```text
 0 1 2 3 4 5 6 7
 ```
 
-## Commands
-
-Test linear equivalence:
+Files in `examples/` can be used immediately, for example:
 
 ```bash
-./build/affine_equiv equiv --mode linear \
-  --left F.tt \
-  --right G.tt
+./aleq examples/identity_3.tt examples/affine_translate_3.tt
+./aleq examples/identity_3.tt --self --all
 ```
 
-Test affine equivalence:
+In PowerShell, use `.\aleq.cmd` in place of `./aleq`.
 
-```bash
-./build/affine_equiv equiv --mode affine \
-  --left F.tt \
-  --right G.tt
+## C++ API
+
+Include `equivalence_api.hpp`. The two public functions return an
+`EquivalenceGenerator`:
+
+```cpp
+auto self = affine::api::generate_self_equivalences(function_table);
+auto between = affine::api::generate_equivalences(left_table, right_table);
 ```
 
-Compute generators for the affine self-equivalence group of one function:
+The compact representation is available without enumerating the group:
 
-```bash
-./build/affine_equiv self --mode affine --function F.tt
+```cpp
+const auto* witness = between.witness();
+auto generators = between.paired_group_generators();
 ```
 
-Run seeded equivalence: first compute the target function's self-equivalence
-group, then use its paired `(A1,A2)` generators for orbit pruning in the
-equivalence search.
+`witness` is null when the functions are not equivalent. Otherwise, the
+witness together with the paired generators represents every equivalence.
+Call `next()` to obtain them one at a time:
 
-```bash
-./build/affine_equiv seeded-equiv --mode affine \
-  --left examples/identity_3.tt \
-  --right examples/affine_translate_3.tt
+```cpp
+while (auto equivalence = between.next()) {
+    // equivalence->domain_map and equivalence->codomain_map
+}
 ```
 
-## Options
+For distinct dimensions, pass both explicitly:
 
-`--mode linear|affine`
-: Selects linear or affine equivalence. Linear mode fixes the zero point.
-
-`--branch POLICY`
-: Selects the branching policy. The default is `hyperplanes_only`. Available
-  policies are `hyperplanes_only`, `hyperplanes_first`, `smallest_any`,
-  `domain_point_first`, `codomain_point_first`,
-  `domain_hyperplane_first`, and `codomain_hyperplane_first`.
-
-`--profile`
-: Prints selected profiling counters after the run.
-
-## Output
-
-The tool prints key-value lines intended to be easy to parse:
-
-```text
-task=equiv
-mode=linear
-branch_policy=hyperplanes_only
-dimension=3
-found=1
-elapsed_ms=...
-nodes=...
-solutions=1
-a1_generators=...
-a2_generators=...
+```cpp
+auto self = affine::api::generate_self_equivalences(n, m, function_table);
+auto between = affine::api::generate_equivalences(
+    n, m, left_table, right_table);
 ```
 
-For self-equivalence runs, `solutions` is the number of verified
-self-equivalences found while discovering the group. Because the search uses
-orbit pruning after new automorphisms are found, this is not necessarily the
-full group order. `a1_generators` and `a2_generators` are the number of stored
-generators in the discovered domain and codomain automorphism groups.
+Affine mode is the default. Select linear mode with:
 
-Orbit pruning is performed with paired self-equivalence generators. When the
-search path has fixed both domain-side and codomain-side right objects, the
-algorithm stabilizes the paired group against all of those fixed objects before
-projecting to the current branch side.
+```cpp
+affine::api::SearchOptions {
+    .mode = affine::EquivalenceMode::Linear,
+}
+```
+
+See `examples/rectangular_api.cpp` for a complete small example.
+
+## Diagnostic Tool
+
+The older `affine_equiv` executable remains available for profiling and
+branch-policy experiments. Most users only need `aleq` or the C++ API.
